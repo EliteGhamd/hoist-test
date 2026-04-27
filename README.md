@@ -25,5 +25,5 @@ A multilingual (English / Arabic / Hindi) safety knowledge test app for tower cr
 ## Author
 
 **Albaraa Alghamdi**
-HSE Engineer
+HSE Engineer | Mechanical Engineer
 © 2026
