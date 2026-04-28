@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supervisor Dashboard — Safety Tests</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:#f5f5f0;color:#1a1a1a;line-height:1.5;min-height:100vh}
+.container{max-width:1100px;margin:0 auto;padding:20px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+.title{font-size:22px;font-weight:600;margin:0;color:#0c447c}
+.subtitle{font-size:13px;color:#5f5e5a;margin:4px 0 0 0}
+.card{background:#fff;border:1px solid #e8e6df;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.input{width:100%;height:44px;padding:0 14px;border-radius:8px;border:1px solid #d3d1c7;background:#fff;color:#1a1a1a;font-size:15px;font-family:inherit}
+.input:focus{outline:none;border-color:#378add;box-shadow:0 0 0 3px rgba(55,138,221,.15)}
+.btn{height:44px;padding:0 18px;border-radius:8px;border:1px solid #d3d1c7;background:#fff;color:#1a1a1a;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:#185fa5;color:#fff;border-color:#185fa5}
+.btn-secondary{background:#f1efe8}
+.btn-danger{color:#a32d2d;border-color:#f7c1c1;background:#fcebeb}
+.btn-sm{height:34px;padding:0 12px;font-size:13px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+.stat{padding:18px;background:#fff;border:1px solid #e8e6df;border-radius:12px}
+.stat-label{font-size:11px;color:#5f5e5a;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.stat-val{font-size:30px;font-weight:600;margin-top:6px;color:#0c447c}
+.stat-sub{font-size:12px;color:#5f5e5a;margin-top:4px}
+.stat-stripe-pass{border-top:3px solid #3b6d11}
+.stat-stripe-fail{border-top:3px solid #a32d2d}
+.stat-stripe-info{border-top:3px solid #185fa5}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.controls .input{flex:1;min-width:200px;height:40px}
+.select{height:40px;padding:0 12px;border-radius:8px;border:1px solid #d3d1c7;background:#fff;font-size:14px;font-family:inherit;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #e8e6df}
+th{font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#5f5e5a;background:#f5f5f0;position:sticky;top:0;z-index:1}
+tr:hover td{background:#f9f9f6}
+.pill{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.pill-pass{background:#eaf3de;color:#27500a}
+.pill-fail{background:#fcebeb;color:#791f1f}
+.empty{text-align:center;padding:40px 20px;color:#888780}
+.login-box{max-width:400px;margin:80px auto;padding:32px}
+.error{color:#a32d2d;font-size:13px;padding:8px 0}
+.muted{font-size:13px;color:#5f5e5a}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#3b6d11;margin-right:6px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.table-wrap{overflow-x:auto;max-height:600px;overflow-y:auto}
+.row-actions{display:flex;gap:6px}
+.section-title{font-size:15px;font-weight:600;margin:0 0 12px 0;color:#1a1a1a}
+.top-list{display:flex;flex-direction:column;gap:8px}
+.top-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f5f5f0;border-radius:8px;font-size:14px}
+.top-rank{display:inline-block;width:24px;height:24px;line-height:24px;text-align:center;border-radius:50%;background:#185fa5;color:#fff;font-size:12px;font-weight:600;margin-right:10px}
+@media (max-width:600px){
+  .container{padding:12px}
+  .title{font-size:18px}
+  th,td{padding:8px 6px;font-size:13px}
+  .controls{flex-direction:column;align-items:stretch}
+  .controls .input,.select,.controls .btn{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { getFirestore, collection, query, orderBy, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAefYd8oOnKOoBH8IU4WN5DcvQV6qfOM7E",
+  authDomain: "hoist-test-1.firebaseapp.com",
+  projectId: "hoist-test-1",
+  storageBucket: "hoist-test-1.firebasestorage.app",
+  messagingSenderId: "448016449782",
+  appId: "1:448016449782:web:ef25dd1bd2e2d51ced6cd7"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+
+const state = {
+  user: null,
+  records: [],
+  search: '',
+  filterPass: 'all',
+  filterRange: 'all',
+  filterQuiz: 'all',
+  unsubscribe: null
+};
+
+const root = document.getElementById('app');
+
+onAuthStateChanged(auth, user => {
+  state.user = user;
+  if(user){
+    subscribeRecords();
+    renderDashboard();
+  } else {
+    if(state.unsubscribe){ state.unsubscribe(); state.unsubscribe = null; }
+    state.records = [];
+    renderLogin();
+  }
+});
+
+function subscribeRecords(){
+  const q = query(collection(db, 'test_records'), orderBy('takenAt', 'desc'));
+  state.unsubscribe = onSnapshot(q, snap => {
+    state.records = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+    if(state.user) renderDashboard();
+  }, err => {
+    console.error('Records subscription error:', err);
+  });
+}
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function fmtDate(ts){
+  const dt = new Date(ts);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function fmtRelative(ts){
+  const sec = Math.floor((Date.now() - ts)/1000);
+  if(sec < 60) return 'just now';
+  if(sec < 3600) return Math.floor(sec/60) + 'm ago';
+  if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
+  return Math.floor(sec/86400) + 'd ago';
+}
+
+function renderLogin(){
+  root.innerHTML = `
+    <div class="login-box card">
+      <h1 class="title" style="text-align:center">Supervisor Login</h1>
+      <p class="subtitle" style="text-align:center">Hoist Maintenance Test Dashboard</p>
+      <div style="margin-top:24px;display:flex;flex-direction:column;gap:12px">
+        <input class="input" id="email" type="email" placeholder="Email" autocomplete="email">
+        <input class="input" id="password" type="password" placeholder="Password" autocomplete="current-password">
+        <button class="btn btn-primary" id="login-btn">Sign in</button>
+        <p class="error" id="err" style="display:none;text-align:center"></p>
+      </div>
+      <p class="muted" style="text-align:center;margin-top:24px;font-size:11px">Created by Albaraa Alghamdi · HSE Engineer · 2026</p>
+    </div>`;
+
+  const submit = async ()=>{
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const err = document.getElementById('err');
+    err.style.display = 'none';
+    if(!email || !password){ err.textContent = 'Please enter email and password'; err.style.display='block'; return; }
+    try{
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch(e){
+      err.textContent = e.code === 'auth/invalid-credential' ? 'Wrong email or password' : (e.message || 'Login failed');
+      err.style.display = 'block';
+    }
+  };
+  document.getElementById('login-btn').onclick = submit;
+  document.getElementById('password').addEventListener('keypress', e=>{ if(e.key==='Enter') submit(); });
+  document.getElementById('email').focus();
+}
+
+function getFilteredRecords(){
+  const search = state.search.toLowerCase().trim();
+  const now = Date.now();
+  const ranges = { '7d': 7*86400000, '30d': 30*86400000, '90d': 90*86400000 };
+  return state.records.filter(r=>{
+    if(state.filterQuiz !== 'all'){
+      const qt = r.quizType || 'hoist_maintenance';
+      if(state.filterQuiz !== qt) return false;
+    }
+    if(state.filterPass === 'pass' && !r.pass) return false;
+    if(state.filterPass === 'fail' && r.pass) return false;
+    if(state.filterRange !== 'all' && (now - r.takenAt) > ranges[state.filterRange]) return false;
+    if(search){
+      const hay = ((r.name||'') + ' ' + (r.id||'') + ' ' + (r.company||'')).toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function quizLabel(qt){
+  if(!qt || qt === 'hoist_maintenance') return 'Hoist';
+  if(qt === 'lifting_operations') return 'Lifting';
+  return qt;
+}
+
+function getStats(records){
+  const total = records.length;
+  const passed = records.filter(r=>r.pass).length;
+  const failed = total - passed;
+  const passRate = total ? Math.round((passed/total)*100) : 0;
+  const avgScore = total ? Math.round(records.reduce((s,r)=>s+r.pct,0)/total) : 0;
+  const today = records.filter(r => (Date.now() - r.takenAt) < 86400000).length;
+
+  const byPerson = {};
+  records.forEach(r=>{
+    const k = r.id || r.name;
+    if(!byPerson[k]) byPerson[k] = { name:r.name, id:r.id, scores:[], passes:0, attempts:0 };
+    byPerson[k].scores.push(r.pct);
+    byPerson[k].attempts++;
+    if(r.pass) byPerson[k].passes++;
+  });
+  const performers = Object.values(byPerson).map(p=>({
+    ...p,
+    avg: Math.round(p.scores.reduce((s,x)=>s+x,0)/p.scores.length),
+    best: Math.max(...p.scores)
+  }));
+  const top = [...performers].sort((a,b)=>b.avg-a.avg || b.best-a.best).slice(0,5);
+
+  return { total, passed, failed, passRate, avgScore, today, top };
+}
+
+function renderDashboard(){
+  const filtered = getFilteredRecords();
+  const stats = getStats(state.records);
+
+  root.innerHTML = `
+    <div class="header">
+      <div>
+        <h1 class="title">Supervisor Dashboard</h1>
+        <p class="subtitle"><span class="live-dot"></span>Live · ${escapeHtml(state.user.email)} · all safety tests</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="logout-btn">Sign out</button>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat stat-stripe-info">
+        <div class="stat-label">Total tests</div>
+        <div class="stat-val">${stats.total}</div>
+        <div class="stat-sub">All time</div>
+      </div>
+      <div class="stat stat-stripe-pass">
+        <div class="stat-label">Pass rate</div>
+        <div class="stat-val">${stats.passRate}%</div>
+        <div class="stat-sub">${stats.passed} passed · ${stats.failed} failed</div>
+      </div>
+      <div class="stat stat-stripe-info">
+        <div class="stat-label">Average score</div>
+        <div class="stat-val">${stats.avgScore}%</div>
+        <div class="stat-sub">across all attempts</div>
+      </div>
+      <div class="stat stat-stripe-info">
+        <div class="stat-label">Today</div>
+        <div class="stat-val">${stats.today}</div>
+        <div class="stat-sub">tests in last 24h</div>
+      </div>
+    </div>
+
+    ${stats.top.length > 0 ? `
+      <div class="card" style="margin-bottom:20px">
+        <p class="section-title">Top performers</p>
+        <div class="top-list">
+          ${stats.top.map((p,i)=>`
+            <div class="top-item">
+              <div><span class="top-rank">${i+1}</span>${escapeHtml(p.name)} <span class="muted">· ${escapeHtml(p.id||'')}</span></div>
+              <div><span class="muted">${p.attempts} attempts · </span><strong>${p.avg}% avg</strong></div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+
+    <div class="card">
+      <div class="controls">
+        <input class="input" id="search" placeholder="Search by name, ID, or company..." value="${escapeHtml(state.search)}">
+        <select class="select" id="f-quiz">
+          <option value="all"${state.filterQuiz==='all'?' selected':''}>All quizzes</option>
+          <option value="hoist_maintenance"${state.filterQuiz==='hoist_maintenance'?' selected':''}>Hoist maintenance</option>
+          <option value="lifting_operations"${state.filterQuiz==='lifting_operations'?' selected':''}>Lifting operations</option>
+        </select>
+        <select class="select" id="f-pass">
+          <option value="all"${state.filterPass==='all'?' selected':''}>All results</option>
+          <option value="pass"${state.filterPass==='pass'?' selected':''}>Passed only</option>
+          <option value="fail"${state.filterPass==='fail'?' selected':''}>Failed only</option>
+        </select>
+        <select class="select" id="f-range">
+          <option value="all"${state.filterRange==='all'?' selected':''}>All time</option>
+          <option value="7d"${state.filterRange==='7d'?' selected':''}>Last 7 days</option>
+          <option value="30d"${state.filterRange==='30d'?' selected':''}>Last 30 days</option>
+          <option value="90d"${state.filterRange==='90d'?' selected':''}>Last 90 days</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" id="csv-btn">Export CSV</button>
+        <button class="btn btn-secondary btn-sm" id="pdf-btn">Export PDF</button>
+      </div>
+
+      <p class="muted" style="margin-bottom:8px">Showing ${filtered.length} of ${stats.total} records</p>
+
+      <div class="table-wrap">
+        ${filtered.length === 0 ? `
+          <div class="empty">No records match your filters.</div>
+        ` : `
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Quiz</th>
+                <th>Name</th>
+                <th>ID</th>
+                <th>Company</th>
+                <th>Score</th>
+                <th>Result</th>
+                <th>Lang</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filtered.map(r=>`
+                <tr>
+                  <td title="${fmtDate(r.takenAt)}">${fmtRelative(r.takenAt)}</td>
+                  <td><span class="pill pill-info">${escapeHtml(quizLabel(r.quizType))}</span></td>
+                  <td>${escapeHtml(r.name)}</td>
+                  <td>${escapeHtml(r.id)}</td>
+                  <td>${escapeHtml(r.company || '—')}</td>
+                  <td>${r.score}/${r.total} (${r.pct}%)</td>
+                  <td><span class="pill ${r.pass?'pill-pass':'pill-fail'}">${r.pass?'PASS':'FAIL'}</span></td>
+                  <td>${(r.lang||'').toUpperCase()}</td>
+                  <td><button class="btn btn-danger btn-sm del" data-id="${escapeHtml(r._id)}">Delete</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `}
+      </div>
+    </div>
+
+    <p class="muted" style="text-align:center;margin-top:24px;font-size:11px">Created by Albaraa Alghamdi · HSE Engineer · 2026</p>
+  `;
+
+  document.getElementById('logout-btn').onclick = ()=> signOut(auth);
+
+  const searchEl = document.getElementById('search');
+  let searchTimer;
+  searchEl.addEventListener('input', e=>{
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(()=>{ state.search = e.target.value; renderDashboard(); searchEl.focus(); searchEl.setSelectionRange(searchEl.value.length, searchEl.value.length); }, 200);
+  });
+
+  document.getElementById('f-pass').onchange = e=>{ state.filterPass = e.target.value; renderDashboard(); };
+  document.getElementById('f-range').onchange = e=>{ state.filterRange = e.target.value; renderDashboard(); };
+  document.getElementById('f-quiz').onchange = e=>{ state.filterQuiz = e.target.value; renderDashboard(); };
+  document.getElementById('csv-btn').onclick = ()=> exportCsv(getFilteredRecords());
+  document.getElementById('pdf-btn').onclick = ()=> exportPdf(getFilteredRecords());
+
+  document.querySelectorAll('.del').forEach(b=>{
+    b.onclick = async ()=>{
+      if(!confirm('Delete this record permanently?')) return;
+      try{ await deleteDoc(doc(db, 'test_records', b.dataset.id)); }
+      catch(e){ alert('Could not delete: ' + e.message); }
+    };
+  });
+}
+
+function exportCsv(records){
+  const headers = ['Date','Quiz','Name','ID','Company','Score','Total','Percent','Result','Language'];
+  const rows = records.map(r=>[
+    fmtDate(r.takenAt),
+    quizLabel(r.quizType),
+    `"${(r.name||'').replace(/"/g,'""')}"`,
+    `"${(r.id||'').replace(/"/g,'""')}"`,
+    `"${(r.company||'').replace(/"/g,'""')}"`,
+    r.score, r.total, r.pct + '%',
+    r.pass ? 'PASS' : 'FAIL',
+    (r.lang||'').toUpperCase()
+  ]);
+  const csv = '\uFEFF' + [headers.join(','), ...rows.map(r=>r.join(','))].join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `safety_test_records_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportPdf(records){
+  if(!window.jspdf){ alert('PDF library not loaded.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(16); doc.setFont(undefined,'bold');
+  doc.text('Safety Test Records', pageW/2, 18, {align:'center'});
+  doc.setFontSize(10); doc.setFont(undefined,'normal');
+  doc.text(`Generated: ${fmtDate(Date.now())}`, pageW/2, 26, {align:'center'});
+
+  const passCount = records.filter(r=>r.pass).length;
+  const passRate = records.length ? Math.round((passCount/records.length)*100) : 0;
+  doc.text(`Total: ${records.length}   |   Passed: ${passCount}   |   Pass rate: ${passRate}%`, pageW/2, 33, {align:'center'});
+
+  let y = 45;
+  doc.setFontSize(8); doc.setFont(undefined,'bold');
+  doc.text('Date', 14, y);
+  doc.text('Quiz', 50, y);
+  doc.text('Name', 75, y);
+  doc.text('ID', 125, y);
+  doc.text('Score', 155, y);
+  doc.text('Result', 180, y);
+  doc.line(14, y+1.5, pageW-14, y+1.5);
+  y += 6;
+
+  doc.setFont(undefined,'normal');
+  records.forEach(r=>{
+    if(y > 280){ doc.addPage(); y = 20; }
+    doc.text(fmtDate(r.takenAt), 14, y);
+    doc.text(quizLabel(r.quizType), 50, y);
+    doc.text((r.name||'').slice(0,24), 75, y);
+    doc.text((r.id||'').slice(0,14), 125, y);
+    doc.text(`${r.score}/${r.total} (${r.pct}%)`, 155, y);
+    if(r.pass){ doc.setTextColor(39,80,10); } else { doc.setTextColor(121,31,31); }
+    doc.text(r.pass ? 'PASS' : 'FAIL', 180, y);
+    doc.setTextColor(0,0,0);
+    y += 6;
+  });
+
+  doc.setFontSize(8); doc.setTextColor(120,120,120);
+  doc.text('Created by Albaraa Alghamdi - HSE Engineer - 2026', pageW/2, 290, {align:'center'});
+  doc.save(`safety_test_records_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+</script>
+</body>
+</html>
